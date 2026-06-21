@@ -34,9 +34,10 @@ canvas { display: block; }
 .readouts div { margin: 2px 0; }
 
 #hints {
-  position: absolute; bottom: 12px; left: 12px; background: rgba(0,0,0,0.7);
+  position: absolute; bottom: 12px; right: 12px; background: rgba(0,0,0,0.7);
   color: #aab; font-family: monospace; font-size: 11px; padding: 8px 12px;
   border-radius: 4px; z-index: 10; max-width: 360px; line-height: 1.5;
+  display: block; text-align: right;
 }
 #hints h3 { font-size: 12px; color: #cdd; margin-top: 6px; }
 #hints h3:first-child { margin-top: 0; }

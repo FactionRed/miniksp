@@ -129,6 +129,7 @@ hints.innerHTML = `
   <div style="margin-top:6px;color:#667">Press H to hide/show this help</div>
 `;
 document.body.appendChild(hints);
+hints.style.display = 'block';
 input.onPressed('KeyH', () => {
   hints.style.display = hints.style.display === 'none' ? 'block' : 'none';
 });
