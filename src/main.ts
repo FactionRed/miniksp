@@ -7,6 +7,8 @@ import { VabController } from './building/vab-controller';
 import { VabUi } from './building/vab-ui';
 import { FlightController } from './flight/flight-controller';
 import { FlightControls } from './flight/controls';
+import { Hud } from './flight/hud';
+import { OrbitMap } from './ui/orbit-map';
 import type { ShipDesign } from './entities/ship';
 
 const app = document.getElementById('app')!;
@@ -45,6 +47,7 @@ function launchFlight(design: ShipDesign) {
   ui.hide();
   flight = new FlightController(design, scene, vabCam.camera);
   controls = new FlightControls(input, flight);
+  hud.show();
   fsm.transition('FLIGHT');
 }
 
@@ -57,6 +60,10 @@ const ui = new VabUi({
   },
   onRevert: () => {},
 });
+
+const hud = new Hud();
+const orbitMap = new OrbitMap();
+input.onPressed('KeyM', () => orbitMap.toggle());
 
 input.onPressed('Delete', () => vab.deleteSelected());
 input.onPressed('KeyQ', () => vab.rotateSelected(-90));
@@ -93,6 +100,8 @@ function animate() {
   if (fsm.current === 'FLIGHT' && flight && controls) {
     controls.update(1 / 60);
     flight.step(1 / 60);
+    hud.update(flight);
+    orbitMap.draw(flight);
   }
   renderer.render(scene, vabCam.camera);
   input.endFrame();
