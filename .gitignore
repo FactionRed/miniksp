@@ -1,3 +1,9 @@
 node_modules
 dist
 *.local
+
+# tsc should only typecheck (noEmit); never commit compiled JS next to sources
+src/**/*.js
+src/**/*.js.map
+test/**/*.js
+test/**/*.js.map
