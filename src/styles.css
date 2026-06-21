@@ -1,3 +1,23 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body, #app { width: 100%; height: 100%; overflow: hidden; background: #000; }
 canvas { display: block; }
+
+#vab-ui {
+  position: absolute; top: 0; left: 0; width: 240px; height: 100%;
+  display: flex; flex-direction: column; gap: 8px; padding: 12px;
+  background: rgba(10,15,30,0.85); color: #cdd; font-family: sans-serif;
+  pointer-events: auto; z-index: 10;
+}
+#vab-ui .panel { background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; }
+#vab-ui h2 { font-size: 14px; margin-bottom: 8px; }
+#palette { display: flex; flex-direction: column; gap: 4px; }
+.part-btn {
+  text-align: left; padding: 6px 8px; border: 1px solid #334;
+  background: #112; color: #cdd; border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+.part-btn:hover { background: #224; }
+.part-btn .swatch { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 2px; }
+#vab-ui .actions { margin-top: auto; display: flex; flex-direction: column; gap: 4px; }
+#vab-ui .actions button { padding: 8px; border-radius: 4px; border: 1px solid #334; background: #112; color: #cdd; cursor: pointer; }
+#launch { background: #163 !important; font-weight: bold; }
+#launch:disabled { opacity: 0.4; cursor: not-allowed; }
