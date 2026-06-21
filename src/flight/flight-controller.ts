@@ -63,13 +63,20 @@ export class FlightController {
       const bottom = b.position.y - halfY;
       if (bottom < lowestY) lowestY = bottom;
     }
-    const lift = PLANET.radius - lowestY + 1; // +1m clearance so we settle rather than embed
+    const lift = PLANET.radius - lowestY + 5; // +5m clearance so the stack clearly clears the surface
     for (const b of this.ship.bodies) {
       b.position.y += lift;
       // Settle-on-launchpad insurance: zero any inherited velocity/rotation rate.
       b.velocity.set(0, 0, 0);
       b.angularVelocity.set(0, 0, 0);
     }
+    // Debug: confirm spawn placement (remove after tuning).
+    const rb = this.ship.rootBody;
+    console.log(
+      `[spawn] bodies=${this.ship.bodies.length} lowestY=${lowestY.toFixed(2)} lift=${lift.toFixed(2)} ` +
+        `root at y=${rb.position.y.toFixed(2)} (alt ${(rb.position.y - PLANET.radius).toFixed(2)}), ` +
+        `planet radius=${PLANET.radius}`,
+    );
 
     this.stages = buildStages(design);
     this.gravity = new GravitySystem(this.world, () => this.candidates());
