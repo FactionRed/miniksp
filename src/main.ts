@@ -9,6 +9,7 @@ import { FlightController } from './flight/flight-controller';
 import { FlightControls } from './flight/controls';
 import { Hud } from './flight/hud';
 import { OrbitMap } from './ui/orbit-map';
+import { WinStates } from './ui/win-states';
 import type { ShipDesign } from './entities/ship';
 
 const app = document.getElementById('app')!;
@@ -48,7 +49,24 @@ function launchFlight(design: ShipDesign) {
   flight = new FlightController(design, scene, vabCam.camera);
   controls = new FlightControls(input, flight);
   hud.show();
+  win.reset();
   fsm.transition('FLIGHT');
+}
+
+function revertToVab() {
+  if (flight) {
+    scene.remove(flight.group);
+    scene.remove(flight.planet.mesh);
+    scene.remove(flight.moon.mesh);
+    flight = null;
+    controls = null;
+  }
+  vab.group.visible = true;
+  ui.show();
+  hud.hide();
+  orbitMap.hide();
+  win.hide();
+  fsm.transition('BUILD');
 }
 
 const ui = new VabUi({
@@ -63,7 +81,11 @@ const ui = new VabUi({
 
 const hud = new Hud();
 const orbitMap = new OrbitMap();
+const win = new WinStates();
 input.onPressed('KeyM', () => orbitMap.toggle());
+input.onPressed('F1', () => {
+  if (fsm.current !== 'BUILD') revertToVab();
+});
 
 input.onPressed('Delete', () => vab.deleteSelected());
 input.onPressed('KeyQ', () => vab.rotateSelected(-90));
@@ -102,6 +124,7 @@ function animate() {
     flight.step(1 / 60);
     hud.update(flight);
     orbitMap.draw(flight);
+    win.update(flight);
   }
   renderer.render(scene, vabCam.camera);
   input.endFrame();
