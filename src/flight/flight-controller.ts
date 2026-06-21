@@ -2,6 +2,7 @@
 import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import { buildShipPhysics, type BuiltShip } from './ship-builder';
+import { buildStages, type Stage } from './stage-manager';
 import { GravitySystem } from '../physics/gravity';
 import { dominantBody } from '../physics/gravity';
 import { CelestialBody } from '../physics/celestial-body';
@@ -19,6 +20,8 @@ export class FlightController {
   throttle = 0; // 0..1
   private gravity: GravitySystem;
   private stageActive = true;
+  private stages: Stage[] = [];
+  private currentStageIndex = 0;
 
   constructor(
     design: ShipDesign,
@@ -53,6 +56,7 @@ export class FlightController {
     const spawnY = PLANET.radius + 3;
     for (const b of this.ship.bodies) b.position.y += spawnY;
 
+    this.stages = buildStages(design);
     this.gravity = new GravitySystem(this.world, () => this.candidates());
   }
 
@@ -75,6 +79,43 @@ export class FlightController {
 
   cutStage(): void {
     this.stageActive = false;
+  }
+
+  /** Decouple the current (lowest) stage: remove its bodies + constraints from the world. */
+  stage(): void {
+    const st = this.stages[this.currentStageIndex];
+    if (!st) return;
+    const toRemove = new Set<string>([...st.engineUids, ...st.tankUids]);
+    if (st.decouplerUid) toRemove.add(st.decouplerUid);
+
+    const remaining: CANNON.Body[] = [];
+    for (const b of this.ship.bodies) {
+      const meta = this.ship.meta.get(b);
+      if (meta && toRemove.has(meta.uid)) {
+        this.world.removeBody(b);
+        this.ship.group.remove(meta.mesh);
+        this.ship.meta.delete(b);
+      } else {
+        remaining.push(b);
+      }
+    }
+    this.ship.bodies = remaining;
+    this.ship.engineBodies = this.ship.engineBodies.filter((b) => {
+      const meta = this.ship.meta.get(b);
+      return meta ? !toRemove.has(meta.uid) : false;
+    });
+    // Remove constraints touching removed bodies (cannon Constraint exposes bodyA/bodyB).
+    this.ship.constraints = this.ship.constraints.filter((c) => {
+      const ca = c as unknown as { bodyA: CANNON.Body; bodyB: CANNON.Body };
+      const aStill = remaining.includes(ca.bodyA);
+      const bStill = remaining.includes(ca.bodyB);
+      if (!aStill || !bStill) {
+        this.world.removeConstraint(c);
+        return false;
+      }
+      return true;
+    });
+    this.currentStageIndex++;
   }
 
   /** Apply thrust if any fuel remains. thrust (kN) per engine, throttle-scaled. */

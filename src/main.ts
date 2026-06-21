@@ -6,6 +6,7 @@ import { VabCamera } from './building/vab-camera';
 import { VabController } from './building/vab-controller';
 import { VabUi } from './building/vab-ui';
 import { FlightController } from './flight/flight-controller';
+import { FlightControls } from './flight/controls';
 import type { ShipDesign } from './entities/ship';
 
 const app = document.getElementById('app')!;
@@ -34,6 +35,7 @@ vabCam.attach(renderer.domElement);
 
 // --- FLIGHT (added in M5) ---
 let flight: FlightController | null = null;
+let controls: FlightControls | null = null;
 
 function launchFlight(design: ShipDesign) {
   if (flight) {
@@ -42,6 +44,7 @@ function launchFlight(design: ShipDesign) {
   vab.group.visible = false;
   ui.hide();
   flight = new FlightController(design, scene, vabCam.camera);
+  controls = new FlightControls(input, flight);
   fsm.transition('FLIGHT');
 }
 
@@ -87,9 +90,8 @@ fsm.onTransition((from, to) => {
 function animate() {
   requestAnimationFrame(animate);
   if (fsm.current === 'BUILD') ui.onReadyChange(vab.isReady());
-  if (fsm.current === 'FLIGHT' && flight) {
-    // Auto-throttle for M5 flight test; replaced by controls in M6.
-    if (flight.throttle < 1) flight.throttle = Math.min(1, flight.throttle + 0.01);
+  if (fsm.current === 'FLIGHT' && flight && controls) {
+    controls.update(1 / 60);
     flight.step(1 / 60);
   }
   renderer.render(scene, vabCam.camera);
