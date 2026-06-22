@@ -85,9 +85,24 @@ export class VabCamera {
     return { point: hit.point.clone(), normal, object: hit.object };
   }
 
+  /**
+   * Reset to default VAB orientation. Required on returning from flight: the
+   * flight camera sets camera.up to a radial vector, which would leave the VAB
+   * view upside-down/sideways unless we restore the canonical world-up here.
+   */
+  reset(): void {
+    this.spherical.set(60, Math.PI / 3, 0);
+    this.target.set(0, 5, 0);
+    this.camera.up.set(0, 1, 0);
+    this.updateCamera();
+  }
+
   private updateCamera(): void {
     const p = new THREE.Vector3().setFromSpherical(this.spherical).add(this.target);
     this.camera.position.copy(p);
+    // Always re-assert canonical up before lookAt — flight camera may have left
+    // it pointing somewhere weird.
+    this.camera.up.set(0, 1, 0);
     this.camera.lookAt(this.target);
   }
 

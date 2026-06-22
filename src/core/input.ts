@@ -12,8 +12,13 @@ export class Input {
       this.down.add(k);
       const handlers = this.onPressedHandlers.get(k);
       if (handlers) for (const h of handlers) h();
-      // prevent space/arrow scroll
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k)) e.preventDefault();
+      // Suppress the browser's default for keys we use as game controls so they
+      // don't scroll the page (Space/Arrows) or open help (F1) / dev tools (F12).
+      if (
+        ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'F1', 'F12'].includes(k)
+      ) {
+        e.preventDefault();
+      }
     }) as EventListener);
     target.addEventListener('keyup', ((e: KeyboardEvent) => {
       this.down.delete(e.code);

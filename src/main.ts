@@ -71,6 +71,9 @@ function revertToVab() {
     flightCam.detach();
     flightCam = null;
   }
+  // Restore the VAB camera: the flight camera repointed its up-vector, so we
+  // must reset orientation or the builder view comes back sideways/upside-down.
+  vabCam.reset();
   vab.group.visible = true;
   ui.show();
   hud.hide();
