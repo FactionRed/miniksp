@@ -145,7 +145,7 @@ export class FlightController {
       mass: jettisonedMass,
       collisionFilterGroup: flyingBody.collisionFilterGroup,
       collisionFilterMask: flyingBody.collisionFilterMask,
-      linearDamping: 0.05,
+      linearDamping: 0, // no drag in vacuum
       angularDamping: 0.1,
     });
     newBody.position.copy(flyingBody.position);

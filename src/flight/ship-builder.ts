@@ -61,7 +61,10 @@ export function buildShipPhysics(design: ShipDesign): BuiltShip {
     mass: design.parts.reduce((s, p) => s + getPartDef(p.partId).dryMass, 0),
     collisionFilterGroup: COLLISION_GROUP.SHIP,
     collisionFilterMask: SHIP_COLLISION_MASK,
-    linearDamping: 0.05,
+    // NO linear damping — there's no atmosphere in this prototype, so velocity
+    // must persist exactly (damping would decay every orbit into the ground).
+    // A little angular damping tames rotation-rate noise for nicer flight feel.
+    linearDamping: 0,
     angularDamping: 0.1,
   });
   body.position.set(cx, cy, cz);
