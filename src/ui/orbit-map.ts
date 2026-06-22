@@ -1,176 +1,147 @@
 // src/ui/orbit-map.ts
+import * as THREE from 'three';
 import type { FlightController } from '../flight/flight-controller';
 
-const TRAJECTORY_STEPS = 800;
+const TRAJECTORY_STEPS = 1000;
 const TRAJECTORY_DT = 0.5;
 
 /**
- * Full-screen 2D orbital map (top-down, world XZ → canvas XY).
+ * 3D orbital map view.
  *
- * Features:
- * - Wheel zoom (in/out, with limits), left-drag pan.
- * - Auto-fit on open: defaults to a scale that shows the whole system
- *   (planet + moon orbit) so you immediately see where you are.
- * - Scale bar + zoom % readout in the corner.
- * - Planet, moon, moon's orbit ring, ship, and a forward-integrated trajectory
- *   relative to the dominant celestial body.
+ * When open, the camera pulls back to show the whole system and you orbit it
+ * with the mouse (left-drag rotates, wheel zooms). The predicted trajectory is
+ * drawn as a 3D line in the scene. A small DOM overlay shows help text and the
+ * Ap/Pe readout. Closes with M.
+ *
+ * This replaces the earlier 2D top-down canvas — the game is 3D, so maneuvers
+ * out of the XZ plane were unreadable.
  */
 export class OrbitMap {
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
   visible = false;
+  private overlay: HTMLElement;
+  private apPeText: HTMLElement;
+  private trajectoryLine: THREE.Line | null = null;
 
-  /** Pixels per world-meter. Defaulted in open(). */
-  private scale = 0.05;
-  /** Pan offset in screen pixels from the world origin (planet center). */
-  private panX = 0;
-  private panY = 0;
-
+  // Map camera state (separate from flight camera).
+  private mapAzimuth = Math.PI / 4;
+  private mapPitch = Math.PI / 6;
+  private mapDistance = 8000;
   private dragging = false;
   private lastX = 0;
   private lastY = 0;
 
-  /** Bounds for sanity. */
-  private readonly minScale = 0.0008; // zoomed all the way out (system view)
-  private readonly maxScale = 2; // zoomed all the way in (close on ship)
-
-  constructor() {
-    this.canvas = document.createElement('canvas');
-    this.canvas.id = 'orbit-map';
-    const ctx = this.canvas.getContext('2d')!;
-    this.ctx = ctx;
-    Object.assign(this.canvas.style, {
+  constructor(private scene: THREE.Scene, private camera: THREE.PerspectiveCamera) {
+    this.overlay = document.createElement('div');
+    this.overlay.id = 'map-overlay';
+    Object.assign(this.overlay.style, {
       position: 'absolute',
-      left: '0',
-      top: '0',
-      background: 'rgba(0,0,5,0.92)',
+      left: '12px',
+      top: '12px',
+      background: 'rgba(0,0,10,0.78)',
+      color: '#cdd',
+      fontFamily: 'monospace',
+      fontSize: '12px',
+      padding: '8px 12px',
+      borderRadius: '6px',
+      border: '1px solid #2a3550',
       display: 'none',
       zIndex: '20',
-      cursor: 'grab',
+      pointerEvents: 'none',
+      lineHeight: '1.6',
     } as Partial<CSSStyleDeclaration>);
-    document.body.appendChild(this.canvas);
+    this.overlay.innerHTML = `
+      <div id="map-appe" style="color:#9cf;margin-bottom:4px">Ap - / Pe -</div>
+      <div id="map-help" style="color:#7a8aa5">MAP · drag rotate · wheel zoom · M close</div>
+    `;
+    document.body.appendChild(this.overlay);
+    this.apPeText = this.overlay.querySelector('#map-appe')!;
+  }
 
-    this.resize();
-    window.addEventListener('resize', () => this.resize());
+  /** Mouse handlers — attached only while the map is open to avoid stealing flight input. */
+  private onDown: ((e: PointerEvent) => void) | null = null;
+  private onMove: ((e: PointerEvent) => void) | null = null;
+  private onUp: (() => void) | null = null;
+  private onWheel: ((e: WheelEvent) => void) | null = null;
+  private dom: HTMLElement | null = null;
 
-    // Zoom on wheel — zoom toward the cursor so the point under the mouse stays put.
-    this.canvas.addEventListener(
-      'wheel',
-      (e) => {
-        e.preventDefault();
-        const rect = this.canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
-        // World coords under the cursor before zoom.
-        const wx = (mx - this.panX) / this.scale;
-        const wy = (my - this.panY) / this.scale;
-        const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-        this.scale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * factor));
-        // Keep the world point under the cursor stationary.
-        this.panX = mx - wx * this.scale;
-        this.panY = my - wy * this.scale;
-      },
-      { passive: false },
-    );
-
-    this.canvas.addEventListener('pointerdown', (e) => {
+  private attachControls(dom: HTMLElement): void {
+    this.detachControls();
+    this.dom = dom;
+    this.onDown = (e: PointerEvent) => {
       if (e.button !== 0) return;
       this.dragging = true;
       this.lastX = e.clientX;
       this.lastY = e.clientY;
-      this.canvas.style.cursor = 'grabbing';
-    });
-    window.addEventListener('pointermove', (e) => {
+    };
+    this.onMove = (e: PointerEvent) => {
       if (!this.dragging) return;
-      this.panX += e.clientX - this.lastX;
-      this.panY += e.clientY - this.lastY;
+      const dx = e.clientX - this.lastX;
+      const dy = e.clientY - this.lastY;
       this.lastX = e.clientX;
       this.lastY = e.clientY;
-    });
-    window.addEventListener('pointerup', () => {
+      this.mapAzimuth -= dx * 0.005;
+      this.mapPitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, this.mapPitch + dy * 0.005));
+    };
+    this.onUp = () => {
       this.dragging = false;
-      this.canvas.style.cursor = 'grab';
-    });
+    };
+    this.onWheel = (e: WheelEvent) => {
+      const factor = e.deltaY < 0 ? 1 / 1.15 : 1.15;
+      this.mapDistance = Math.max(500, Math.min(20000, this.mapDistance * factor));
+      e.preventDefault();
+    };
+    dom.addEventListener('pointerdown', this.onDown);
+    window.addEventListener('pointermove', this.onMove);
+    window.addEventListener('pointerup', this.onUp);
+    dom.addEventListener('wheel', this.onWheel, { passive: false });
   }
 
-  private resize(): void {
-    this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight;
+  private detachControls(): void {
+    if (this.dom && this.onDown) this.dom.removeEventListener('pointerdown', this.onDown);
+    if (this.onMove) window.removeEventListener('pointermove', this.onMove);
+    if (this.onUp) window.removeEventListener('pointerup', this.onUp);
+    if (this.dom && this.onWheel) this.dom.removeEventListener('wheel', this.onWheel);
+    this.dom = null;
   }
 
-  toggle(flight?: FlightController): void {
+  toggle(dom: HTMLElement, flight?: FlightController): void {
     this.visible = !this.visible;
-    this.canvas.style.display = this.visible ? 'block' : 'none';
-    if (this.visible && flight) this.autoFit(flight);
+    if (this.visible) {
+      this.overlay.style.display = 'block';
+      this.attachControls(dom);
+      if (flight) this.recomputeTrajectory(flight);
+    } else {
+      this.overlay.style.display = 'none';
+      this.detachControls();
+      this.clearTrajectory();
+    }
   }
 
   hide(): void {
+    if (!this.visible) return;
     this.visible = false;
-    this.canvas.style.display = 'none';
+    this.overlay.style.display = 'none';
+    this.detachControls();
+    this.clearTrajectory();
   }
 
-  /** Reset zoom/pan to fit the whole system (planet + moon orbit) on screen. */
-  private autoFit(flight: FlightController): void {
-    const w = this.canvas.width;
-    const h = this.canvas.height;
-    const span = flight.moon.orbitRadiusApproxForMap * 2.4; // diameter + margin
-    this.scale = Math.min(w, h) / span;
-    this.scale = Math.max(this.minScale, Math.min(this.maxScale, this.scale));
-    // Center on planet (world origin).
-    this.panX = w / 2;
-    this.panY = h / 2;
-  }
-
-  /** Center on the ship and zoom in to a comfortable close view. */
-  focusShip(flight: FlightController): void {
-    const root = flight.ship.rootBody;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
-    this.scale = Math.max(0.3, Math.min(this.maxScale, this.scale));
-    this.panX = w / 2 - root.position.x * this.scale;
-    this.panY = h / 2 - root.position.z * this.scale;
-  }
-
+  /** Recompute trajectory + position the camera. Called each frame while open. */
   draw(flight: FlightController): void {
     if (!this.visible) return;
-    const ctx = this.ctx;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
-    ctx.clearRect(0, 0, w, h);
+    this.recomputeTrajectory(flight);
+    this.updateOverlay(flight);
 
-    const cx = this.panX;
-    const cy = this.panY;
-    const s = this.scale;
+    // Orbit the camera around the planet (system origin) using spherical coords.
+    // Use world-up so the map view doesn't inherit the flight camera's radial up.
+    const x = Math.cos(this.mapPitch) * Math.cos(this.mapAzimuth) * this.mapDistance;
+    const y = Math.sin(this.mapPitch) * this.mapDistance;
+    const z = Math.cos(this.mapPitch) * Math.sin(this.mapAzimuth) * this.mapDistance;
+    this.camera.up.set(0, 1, 0);
+    this.camera.position.set(x, y, z);
+    this.camera.lookAt(0, 0, 0);
+  }
 
-    // Helpers: world (x,z) → screen (px,py).
-    const sx = (wx: number) => cx + wx * s;
-    const sy = (wz: number) => cy + wz * s;
-
-    // --- Celestial bodies ---
-    // Moon orbit ring
-    ctx.strokeStyle = '#345';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(cx, cy, flight.moon.orbitRadiusApproxForMap * s, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Planet
-    const pr = Math.max(2, flight.planet.data.radius * s);
-    ctx.fillStyle = '#3366cc';
-    ctx.beginPath();
-    ctx.arc(cx, cy, pr, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Moon
-    const mx = sx(flight.moon.position.x);
-    const my = sy(flight.moon.position.z);
-    const mr = Math.max(2, flight.moon.data.radius * s);
-    ctx.fillStyle = '#aaaaaa';
-    ctx.beginPath();
-    ctx.arc(mx, my, mr, 0, Math.PI * 2);
-    ctx.fill();
-
-    // --- Predicted trajectory relative to dominant body ---
+  private recomputeTrajectory(flight: FlightController): void {
     const root = flight.ship.rootBody;
     const dom = flight.dominantBodyFor(root.position);
     const mu = dom.mu;
@@ -184,17 +155,15 @@ export class OrbitMap {
     let vy = root.velocity.y;
     let vz = root.velocity.z;
 
-    ctx.strokeStyle = '#2a6';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    let started = false;
+    const pts: THREE.Vector3[] = [];
     for (let i = 0; i < TRAJECTORY_STEPS; i++) {
       const rx = px - bx;
       const ry = py - by;
       const rz = pz - bz;
       const r2 = rx * rx + ry * ry + rz * rz;
       const r = Math.sqrt(r2);
-      if (r < flight.planet.data.radius) break; // crashed
+      if (r < flight.planet.data.radius) break;
+      pts.push(new THREE.Vector3(px, py, pz));
       const a = -mu / (r2 * r);
       vx += a * rx * TRAJECTORY_DT;
       vy += a * ry * TRAJECTORY_DT;
@@ -202,80 +171,50 @@ export class OrbitMap {
       px += vx * TRAJECTORY_DT;
       py += vy * TRAJECTORY_DT;
       pz += vz * TRAJECTORY_DT;
-      // Project onto map (use x,z of the offset from dominant body).
-      const screenX = sx(bx + rx);
-      const screenY = sy(bz + rz);
-      if (!started) {
-        ctx.moveTo(screenX, screenY);
-        started = true;
-      } else {
-        ctx.lineTo(screenX, screenY);
-      }
     }
-    if (started) ctx.stroke();
 
-    // --- Ship marker ---
-    ctx.fillStyle = '#ffee00';
-    const shipR = 5;
-    ctx.beginPath();
-    ctx.arc(sx(root.position.x), sy(root.position.z), shipR, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // --- HUD overlays: scale bar + help + focus hint ---
-    this.drawScaleBar(ctx, w, h);
-    ctx.fillStyle = '#7a8aa5';
-    ctx.font = '12px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText('wheel: zoom · drag: pan · M: close', 12, h - 12);
-    ctx.textAlign = 'right';
-    ctx.fillText(`${(this.scale * 100).toFixed(2)} px/m`, w - 12, h - 12);
+    this.clearTrajectory();
+    if (pts.length < 2) return;
+    const geom = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({ color: 0x33ff66, transparent: true, opacity: 0.7 });
+    this.trajectoryLine = new THREE.Line(geom, mat);
+    this.scene.add(this.trajectoryLine);
   }
 
-  /** Draw a horizontal scale bar (1 / 2 / 5 / 10 / ... world-meters) bottom-left. */
-  private drawScaleBar(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-    // Pick a "nice" length roughly 1/4 of the screen width in world meters.
-    const targetPx = w * 0.25;
-    const targetM = targetPx / this.scale;
-    const niceM = niceRound(targetM);
-    const barPx = niceM * this.scale;
-    const x = 12;
-    const y = h - 36;
-    ctx.strokeStyle = '#cdd';
-    ctx.fillStyle = '#cdd';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + barPx, y);
-    ctx.moveTo(x, y - 4);
-    ctx.lineTo(x, y + 4);
-    ctx.moveTo(x + barPx, y - 4);
-    ctx.lineTo(x + barPx, y + 4);
-    ctx.stroke();
-    ctx.font = '11px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText(formatDistance(niceM), x, y - 8);
+  private clearTrajectory(): void {
+    if (this.trajectoryLine) {
+      this.scene.remove(this.trajectoryLine);
+      this.trajectoryLine.geometry.dispose();
+      (this.trajectoryLine.material as THREE.Material).dispose();
+      this.trajectoryLine = null;
+    }
   }
-}
 
-/** Round to a "nice" 1/2/5×10^n value (e.g. 732 → 500, 0.83 → 1, 12345 → 10000). */
-function niceRound(x: number): number {
-  if (x <= 0) return 1;
-  const exp = Math.floor(Math.log10(x));
-  const base = Math.pow(10, exp);
-  const norm = x / base;
-  let nice: number;
-  if (norm < 1.5) nice = 1;
-  else if (norm < 3.5) nice = 2;
-  else if (norm < 7.5) nice = 5;
-  else nice = 10;
-  return nice * base;
-}
-
-/** Format a distance in m as "350 m" or "4.0 km". */
-function formatDistance(m: number): string {
-  if (m < 1000) return `${m.toFixed(0)} m`;
-  return `${(m / 1000).toFixed(1)} km`;
+  private updateOverlay(flight: FlightController): void {
+    const root = flight.ship.rootBody;
+    const planet = flight.planet;
+    const dx = root.position.x - planet.position.x;
+    const dy = root.position.y - planet.position.y;
+    const dz = root.position.z - planet.position.z;
+    const r = Math.hypot(dx, dy, dz);
+    const v = Math.hypot(root.velocity.x, root.velocity.y, root.velocity.z);
+    // Quick energy-based Ap/Pe (2-body approximation around the planet).
+    const mu = planet.mu;
+    const energy = (v * v) / 2 - mu / r;
+    let apPe = 'escape';
+    if (energy < 0) {
+      // eccentricity from state vectors
+      const rvDot = dx * root.velocity.x + dy * root.velocity.y + dz * root.velocity.z;
+      const v2 = v * v;
+      const kx = (v2 - mu / r) * dx - rvDot * root.velocity.x;
+      const ky = (v2 - mu / r) * dy - rvDot * root.velocity.y;
+      const kz = (v2 - mu / r) * dz - rvDot * root.velocity.z;
+      const ecc = Math.hypot(kx, ky, kz) / mu;
+      const a = -mu / (2 * energy);
+      const ap = a * (1 + ecc) - planet.data.radius;
+      const pe = a * (1 - ecc) - planet.data.radius;
+      apPe = `Ap ${ap.toFixed(0)} m / Pe ${pe.toFixed(0)} m`;
+    }
+    this.apPeText.textContent = apPe;
+  }
 }

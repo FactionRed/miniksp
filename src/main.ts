@@ -10,6 +10,7 @@ import { FlightCamera } from './flight/flight-camera';
 import { FlightControls } from './flight/controls';
 import { Hud } from './flight/hud';
 import { OrbitMap } from './ui/orbit-map';
+import { NavBall } from './ui/navball';
 import { WinStates } from './ui/win-states';
 import type { ShipDesign } from './entities/ship';
 
@@ -55,6 +56,7 @@ function launchFlight(design: ShipDesign) {
   flightCam = new FlightCamera(vabCam.camera);
   flightCam.attach(renderer.domElement);
   hud.show();
+  navball.show();
   win.reset();
   fsm.transition('FLIGHT');
 }
@@ -77,6 +79,7 @@ function revertToVab() {
   vab.group.visible = true;
   ui.show();
   hud.hide();
+  navball.hide();
   orbitMap.hide();
   win.hide();
   fsm.transition('BUILD');
@@ -93,10 +96,11 @@ const ui = new VabUi({
 });
 
 const hud = new Hud();
-const orbitMap = new OrbitMap();
+const orbitMap = new OrbitMap(scene, vabCam.camera);
+const navball = new NavBall();
 const win = new WinStates();
 win.onBuildAgain = () => revertToVab();
-input.onPressed('KeyM', () => orbitMap.toggle(flight ?? undefined));
+input.onPressed('KeyM', () => orbitMap.toggle(renderer.domElement, flight ?? undefined));
 input.onPressed('F1', () => {
   if (fsm.current !== 'BUILD') revertToVab();
 });
@@ -139,7 +143,7 @@ hints.innerHTML = `
   <h3>FLIGHT</h3>
   <div>Shift/Ctrl throttle · Z full · X cut · Space stage</div>
   <div>W/S pitch · A/D yaw · Q/E roll · T stability assist</div>
-  <div>M map · F1 revert</div>
+  <div>M map (drag rotate · wheel zoom) · F1 revert</div>
   <div style="margin-top:6px;color:#667">Press H to hide/show this help</div>
 `;
 document.body.appendChild(hints);
@@ -154,9 +158,14 @@ function animate() {
   if (fsm.current === 'FLIGHT' && flight && controls && flightCam) {
     controls.update(1 / 60);
     flight.step(1 / 60);
-    flightCam.update(flight.ship.rootBody.position, flight.planet.position);
+    // Flight camera and map camera share one camera object — only one may drive it.
+    if (orbitMap.visible) {
+      orbitMap.draw(flight);
+    } else {
+      flightCam.update(flight.ship.rootBody.position, flight.planet.position);
+    }
     hud.update(flight);
-    orbitMap.draw(flight);
+    navball.update(flight);
     win.update(flight);
   }
   renderer.render(scene, vabCam.camera);
