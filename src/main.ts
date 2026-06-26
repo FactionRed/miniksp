@@ -11,6 +11,7 @@ import { FlightControls } from './flight/controls';
 import { Hud } from './flight/hud';
 import { OrbitMap } from './ui/orbit-map';
 import { NavBall } from './ui/navball';
+import { HoldPanel } from './ui/hold-panel';
 import { WinStates } from './ui/win-states';
 import type { ShipDesign } from './entities/ship';
 
@@ -57,6 +58,8 @@ function launchFlight(design: ShipDesign) {
   flightCam.attach(renderer.domElement);
   hud.show();
   navball.show();
+  holdPanel.show();
+  holdPanel.setActive('off');
   win.reset();
   fsm.transition('FLIGHT');
 }
@@ -80,6 +83,7 @@ function revertToVab() {
   ui.show();
   hud.hide();
   navball.hide();
+  holdPanel.hide();
   orbitMap.hide();
   win.hide();
   fsm.transition('BUILD');
@@ -98,6 +102,14 @@ const ui = new VabUi({
 const hud = new Hud();
 const orbitMap = new OrbitMap(scene, vabCam.camera);
 const navball = new NavBall();
+const holdPanel = new HoldPanel();
+holdPanel.onSelect = (mode) => {
+  if (flight) {
+    flight.holdMode = mode;
+    // Engaging a hold mode supersedes SAS (it has its own damping).
+    if (mode !== 'off') flight.sasEnabled = false;
+  }
+};
 const win = new WinStates();
 win.onBuildAgain = () => revertToVab();
 input.onPressed('KeyM', () => orbitMap.toggle(renderer.domElement, flight ?? undefined));
@@ -166,6 +178,7 @@ function animate() {
     }
     hud.update(flight);
     navball.update(flight);
+    holdPanel.setActive(flight.holdMode);
     win.update(flight);
   }
   renderer.render(scene, vabCam.camera);

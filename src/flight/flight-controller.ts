@@ -14,6 +14,8 @@ import { PLANET, MOON } from '../physics/constants';
 // ~30s: burn = 40 * 1 * dt * 0.33 ≈ 13.3 fuel/s → 400 / 13.3 ≈ 30s of thrust.
 const FUEL_BURN_RATE = 0.33;
 
+export type HoldMode = 'off' | 'prograde' | 'retrograde' | 'normal' | 'antinormal';
+
 export class FlightController {
   readonly world = new CANNON.World();
   readonly group = new THREE.Group();
@@ -23,6 +25,8 @@ export class FlightController {
   throttle = 0; // 0..1
   /** Stability Assist (SAS) — when true, applies counter-torque to kill rotation. */
   sasEnabled = false;
+  /** Attitude hold mode — actively points the nose at a computed direction. */
+  holdMode: HoldMode = 'off';
   private gravity: GravitySystem;
   private stageActive = true;
   private stages: Stage[] = [];
@@ -111,6 +115,103 @@ export class FlightController {
 
   cutStage(): void {
     this.stageActive = false;
+  }
+
+  /**
+   * Compute the target direction for the active hold mode and apply PD torque to
+   * rotate the nose toward it. Directions are derived from the ship's position r
+   * and velocity v relative to the dominant celestial body.
+   *
+   *   prograde   = v̂
+   *   retrograde = -v̂
+   *   normal     = (r × v)̂        (orbital angular momentum — "north" of the orbital plane)
+   *   antinormal = -(r × v)̂
+   *
+   * Guarded: needs a nonzero velocity (prograde/retrograde) and a non-radial
+   * trajectory (normal/antinormal — undefined if r ∥ v). If undefined, the mode
+   * effectively holds current attitude.
+   */
+  private applyAttitudeHold(): void {
+    const root = this.ship.rootBody;
+    if (root.type !== CANNON.Body.DYNAMIC) return;
+
+    const dom = this.dominantBodyFor(root.position);
+    const rx = root.position.x - dom.position.x;
+    const ry = root.position.y - dom.position.y;
+    const rz = root.position.z - dom.position.z;
+    const vx = root.velocity.x;
+    const vy = root.velocity.y;
+    const vz = root.velocity.z;
+    const rLen = Math.hypot(rx, ry, rz);
+    const vLen = Math.hypot(vx, vy, vz);
+    if (rLen < 1e-3) return;
+
+    // Compute the desired world-space direction.
+    let tx = 0;
+    let ty = 0;
+    let tz = 0;
+    if (this.holdMode === 'prograde' || this.holdMode === 'retrograde') {
+      if (vLen < 0.5) return; // velocity too low for a meaningful direction
+      const s = this.holdMode === 'prograde' ? 1 : -1;
+      tx = (s * vx) / vLen;
+      ty = (s * vy) / vLen;
+      tz = (s * vz) / vLen;
+    } else {
+      // normal / antinormal — from orbital angular momentum h = r × v
+      const hx = ry * vz - rz * vy;
+      const hy = rz * vx - rx * vz;
+      const hz = rx * vy - ry * vx;
+      const hLen = Math.hypot(hx, hy, hz);
+      if (hLen < 1e-3) return; // r ∥ v — orbital plane undefined
+      const s = this.holdMode === 'normal' ? 1 : -1;
+      tx = (s * hx) / hLen;
+      ty = (s * hy) / hLen;
+      tz = (s * hz) / hLen;
+    }
+
+    // Ship's nose = local +Y rotated to world.
+    const nose = root.quaternion.vmult(new CANNON.Vec3(0, 1, 0));
+    let nx = nose.x;
+    let ny = nose.y;
+    let nz = nose.z;
+
+    // Rotation axis = nose × target; angle ∝ |axis| (small angle ≈ sinθ).
+    let ax = ny * tz - nz * ty;
+    let ay = nz * tx - nx * tz;
+    let az = nx * ty - ny * tx;
+    const aLen = Math.hypot(ax, ay, az);
+    // If nose is near-antiparallel to target, the cross product is ~0 but we
+    // still need to rotate 180° — pick an arbitrary perpendicular axis.
+    if (aLen < 1e-4) {
+      // Already aligned (or anti-aligned). If dot < 0, pick any perpendicular to nose.
+      const dot = nx * tx + ny * ty + nz * tz;
+      if (dot < -0.9999) {
+        // Find a non-parallel axis.
+        ax = Math.abs(nx) < 0.9 ? 1 : 0;
+        ay = Math.abs(ny) < 0.9 && ax === 0 ? 1 : 0;
+        az = Math.abs(nz) < 0.9 && ax === 0 && ay === 0 ? 1 : 0;
+        // Make it perpendicular to nose.
+        const d = ax * nx + ay * ny + az * nz;
+        ax -= d * nx;
+        ay -= d * ny;
+        az -= d * nz;
+        const l = Math.hypot(ax, ay, az) || 1;
+        ax /= l;
+        ay /= l;
+        az /= l;
+      } else {
+        return; // already aligned
+      }
+    }
+
+    // PD torque: proportional to rotation error axis (× mass × gain) +
+    // derivative damping on angular velocity (× mass × damping gain).
+    const HOLD_GAIN = 25; // proportional — higher = snappier
+    const HOLD_DAMP = 12; // derivative — higher = less overshoot
+    const authority = root.mass;
+    root.torque.x += ax * authority * HOLD_GAIN - root.angularVelocity.x * authority * HOLD_DAMP;
+    root.torque.y += ay * authority * HOLD_GAIN - root.angularVelocity.y * authority * HOLD_DAMP;
+    root.torque.z += az * authority * HOLD_GAIN - root.angularVelocity.z * authority * HOLD_DAMP;
   }
 
   /**
@@ -241,12 +342,13 @@ export class FlightController {
       }
     }
 
-    // Stability Assist (SAS): apply counter-torque proportional to angular
-    // velocity so the ship resists rotation and holds attitude. The torque is
-    // scaled by mass + a gain so heavier ships get enough authority to stop
-    // their rotation (KSP scales SAS strength with vessel size similarly).
-    // This adds drag-like resistance but can be overpowered by W/S/A/D/Q/E.
-    if (this.sasEnabled) {
+    // Attitude control.
+    // - If a hold mode is active (prograde/retrograde/etc), actively point the
+    //   nose at that direction with a PD controller. Otherwise, if SAS is on,
+    //   just damp rotation to hold current attitude.
+    if (this.holdMode !== 'off') {
+      this.applyAttitudeHold();
+    } else if (this.sasEnabled) {
       const root = this.ship.rootBody;
       if (root.type === CANNON.Body.DYNAMIC) {
         const SAS_GAIN = 8; // higher = snappier attitude hold
