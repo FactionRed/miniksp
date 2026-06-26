@@ -1,6 +1,12 @@
 // electron/main.ts
 import { app, BrowserWindow, Menu } from 'electron';
 import * as path from 'path';
+import { fileURLToPath } from 'node:url';
+
+// __dirname is not available under ESM (which this runs as, because the root
+// package.json is "type": "module"). Derive it from import.meta.url instead.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Disable the default application menu — the game provides its own HUD UI.
 Menu.setApplicationMenu(null);
@@ -19,7 +25,7 @@ function createWindow(): void {
       // Secure defaults: no Node in renderer, isolated context, minimal preload.
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.mjs'),
     },
   });
 
