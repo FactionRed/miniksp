@@ -11,6 +11,10 @@ win:
       arch:
         - x64
   artifactName: miniKSP-${version}-portable.exe
+  # No code signing for this prototype build. Also set via env to prevent the
+  # winCodeSign toolchain download (which fails on Windows without symlink rights).
+  signingHashAlgorithms: null
+  forceCodeSigning: false
 # Optional: uncomment to build an NSIS installer instead of/in addition to portable.
 # nsis:
 #   oneClick: false
