@@ -4,9 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>miniKSP</title>
+    <!-- Inline loader styles so the loading screen paints before the JS bundle parses. -->
+    <style>
+      #loader {
+        position: fixed; inset: 0; z-index: 100;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: #05060a; color: #cdd; font-family: 'Segoe UI', system-ui, sans-serif;
+        transition: opacity 0.6s ease;
+      }
+      #loader.fading { opacity: 0; pointer-events: none; }
+      #loader .title {
+        font-size: 48px; font-weight: 300; letter-spacing: 6px; margin-bottom: 8px;
+        background: linear-gradient(180deg, #cfe0ff, #5a7bbf);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      #loader .subtitle { font-size: 12px; color: #6a7a95; letter-spacing: 3px; margin-bottom: 36px; text-transform: uppercase; }
+      #loader .bar-track { width: 260px; height: 4px; background: #1a2238; border-radius: 2px; overflow: hidden; }
+      #loader .bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #2a6, #4af); transition: width 0.2s ease; }
+      #loader .pct { font-size: 11px; color: #5a6a85; margin-top: 12px; font-family: monospace; letter-spacing: 1px; }
+    </style>
   </head>
   <body>
     <div id="app"></div>
+    <!-- Loading overlay: visible immediately on first paint, removed by main.ts once init completes. -->
+    <div id="loader">
+      <div class="title">miniKSP</div>
+      <div class="subtitle">Building the launchpad…</div>
+      <div class="bar-track"><div class="bar-fill"></div></div>
+      <div class="pct">0%</div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -14,6 +14,22 @@ import { NavBall } from './ui/navball';
 import { HoldPanel } from './ui/hold-panel';
 import { WinStates } from './ui/win-states';
 import type { ShipDesign } from './entities/ship';
+import { initAssets } from './assets';
+
+// --- Asset loading + loading screen ---
+// The #loader overlay is in index.html (pure HTML/CSS) so it paints before the
+// JS bundle parses. Drive its progress bar from the Three LoadingManager and
+// fade it out once init completes.
+const loaderEl = document.getElementById('loader')!;
+const barFill = loaderEl.querySelector('.bar-fill') as HTMLElement;
+const pctEl = loaderEl.querySelector('.pct') as HTMLElement;
+
+const assets = initAssets();
+assets.manager.onProgress = (_url, loaded, total) => {
+  const pct = total > 0 ? Math.round((loaded / total) * 100) : 100;
+  barFill.style.width = `${pct}%`;
+  pctEl.textContent = `${pct}%`;
+};
 
 const app = document.getElementById('app')!;
 const scene = new THREE.Scene();
@@ -184,7 +200,21 @@ function animate() {
   renderer.render(scene, vabCam.camera);
   input.endFrame();
 }
-animate();
+
+// Start the game only after assets finish loading, then fade out the loader.
+// Currently assets is a no-op (resolves immediately), but this gates the start
+// behind real loads once textures/models are added — improving first-launch UX.
+assets.ready.then(() => {
+  // Force the bar to 100% in case onLoad fired before the overlay connected.
+  barFill.style.width = '100%';
+  pctEl.textContent = '100%';
+  animate();
+  // Fade the overlay out after a tick so the 100% state is visible briefly.
+  requestAnimationFrame(() => {
+    loaderEl.classList.add('fading');
+    setTimeout(() => loaderEl.remove(), 700); // match CSS transition
+  });
+});
 
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
