@@ -1,0 +1,17 @@
+appId: com.miniksp.game
+productName: miniKSP
+directories:
+  output: release
+files:
+  - dist/**/*
+  - dist-electron/**/*
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+  artifactName: miniKSP-${version}-portable.exe
+# Optional: uncomment to build an NSIS installer instead of/in addition to portable.
+# nsis:
+#   oneClick: false
+#   allowToChangeInstallationDirectory: true

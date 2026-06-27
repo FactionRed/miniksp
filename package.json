@@ -6,6 +6,9 @@
   "main": "dist-electron/main.js",
   "author": "miniKSP",
   "description": "A super-basic 3D KSP prototype. Build a rocket, reach orbit, transfer to the moon, land, and return.",
+  "build": {
+    "extends": "./electron-builder.yml"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
