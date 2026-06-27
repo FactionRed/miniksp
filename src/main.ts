@@ -44,9 +44,6 @@ const key = new THREE.DirectionalLight(0xffffff, 1.2);
 key.position.set(20, 40, 30);
 scene.add(key);
 
-const grid = new THREE.GridHelper(100, 40, 0x335, 0x223);
-scene.add(grid);
-
 const fsm = new StateMachine();
 const input = new Input();
 input.attach();
@@ -54,6 +51,12 @@ input.attach();
 const vabCam = new VabCamera(window.innerWidth / window.innerHeight);
 const vab = new VabController(scene, vabCam);
 vabCam.attach(renderer.domElement);
+
+// Build-space grid. Added to vab.group (NOT scene directly) so it hides along
+// with the rest of the VAB on launch — otherwise it sits at the world origin,
+// inside the planet, and shows through the surface.
+const grid = new THREE.GridHelper(100, 40, 0x335, 0x223);
+vab.group.add(grid);
 
 // --- FLIGHT (added in M5) ---
 let flight: FlightController | null = null;

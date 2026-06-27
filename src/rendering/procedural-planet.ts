@@ -76,10 +76,14 @@ function buildTerrainGeometry(radius: number, seed: number, kind: BodyKind): {
   const geom = new THREE.IcosahedronGeometry(radius, detail);
   const noise3D = createNoise3D(mulberry32(seed));
 
-  // Terrain amplitude as a fraction of radius. Planets: oceans + continents.
+  // Terrain amplitude as a fraction of radius. Big enough that mountains visibly
+  // protrude past the smooth outline from orbit/chase distance. (Earlier 0.04
+  // was invisible at viewing scale — 0.18 gives ±54m peaks on a 300m planet.)
   // Moon: smaller, cratered-looking lumps.
-  const amplitudeFrac = kind === 'planet' ? 0.04 : 0.025;
+  const amplitudeFrac = kind === 'planet' ? 0.18 : 0.12;
   const amplitude = radius * amplitudeFrac;
+  // Higher-frequency base so peaks look jagged rather than bulbous.
+  const baseFreq = kind === 'planet' ? 2.5 : 3.5;
 
   const pos = geom.attributes.position as THREE.BufferAttribute;
   const elev = new Float32Array(pos.count);
@@ -95,7 +99,7 @@ function buildTerrainGeometry(radius: number, seed: number, kind: BodyKind): {
     const ny = y / len;
     const nz = z / len;
     // Fractal displacement in [-1, 1], scaled to amplitude.
-    const h = fbm(noise3D, nx, ny, nz, kind === 'planet' ? 5 : 4);
+    const h = fbm(noise3D, nx * baseFreq, ny * baseFreq, nz * baseFreq, kind === 'planet' ? 5 : 4);
     // For planets, bias toward ocean: values below a threshold stay at sea level.
     let elevation: number;
     if (kind === 'planet') {
@@ -108,7 +112,7 @@ function buildTerrainGeometry(radius: number, seed: number, kind: BodyKind): {
       }
     } else {
       // Moon: raw craggy terrain, plus a few "craters" (inverted bumps) via abs().
-      const crater = -Math.abs(noise3D(nx * 4, ny * 4, nz * 4)) * 0.4;
+      const crater = -Math.abs(noise3D(nx * baseFreq * 2, ny * baseFreq * 2, nz * baseFreq * 2)) * 0.4;
       elevation = (h + 1) * 0.5 + crater * 0.5;
     }
 
