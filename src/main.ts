@@ -39,6 +39,15 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 app.appendChild(renderer.domElement);
 
+// Make GLSL compile/link errors surface loudly. Without this, a broken shader
+// silently falls back to a flat default material (which is how the procedural
+// planet's `attribute float uv` collision hid for two build cycles). When set,
+// Three invokes this on any shader failure instead of silent fallback.
+renderer.debug.onShaderError = (_gl, program, _vs, fs) => {
+  const log = _gl.getProgramInfoLog(program) || _gl.getShaderInfoLog(fs);
+  console.error('[shader] compile/link error:', log);
+};
+
 scene.add(new THREE.AmbientLight(0x606080, 1));
 const key = new THREE.DirectionalLight(0xffffff, 1.2);
 key.position.set(20, 40, 30);

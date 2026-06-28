@@ -122,8 +122,11 @@ function buildTerrainGeometry(radius: number, seed: number, kind: BodyKind): {
     if (elevation > maxElev) maxElev = elevation;
   }
 
-  // Pack elevation into uv.y so the vertex shader can forward it to the fragment.
-  geom.setAttribute('uv', new THREE.BufferAttribute(elev, 1));
+  // Per-vertex elevation as a custom attribute. (NOT 'uv' — Three.js declares its
+  // own built-in `attribute vec2 uv` for ShaderMaterials, so hijacking that name
+  // causes a silent shader compile failure and the whole material falls back to a
+  // flat default. A custom `aElevation` name avoids the collision.)
+  geom.setAttribute('aElevation', new THREE.BufferAttribute(elev, 1));
   geom.computeVertexNormals();
   return { geometry: geom, maxElevation: maxElev };
 }
@@ -180,12 +183,12 @@ function buildSurfaceMaterial(opts: ProceduralBodyOptions): THREE.ShaderMaterial
       uNightColor: { value: new THREE.Color(isPlanet ? 0x0a1530 : 0x000000) },
     },
     vertexShader: /* glsl */ `
-      attribute float uv;            // we packed elevation into uv (1-component)
+      attribute float aElevation;    // per-vertex elevation (custom attribute)
       varying float vElevation;
       varying vec3 vWorldNormal;
       varying vec3 vWorldPos;
       void main() {
-        vElevation = uv;
+        vElevation = aElevation;
         vec4 wp = modelMatrix * vec4(position, 1.0);
         vWorldPos = wp.xyz;
         vWorldNormal = normalize(mat3(modelMatrix) * normal);
@@ -289,10 +292,23 @@ export function buildProceduralBody(opts: ProceduralBodyOptions): BuiltProcedura
   const surfaceMat = buildSurfaceMaterial(opts);
   const surface = new THREE.Mesh(geometry, surfaceMat);
 
+  // Surface a GLSL compile/link failure loudly. Without this a broken shader
+  // silently falls back to a flat default material — which is exactly how the
+  // earlier `attribute float uv` collision hid for two build cycles. Done by
+  // hooking the renderer's debug check, called when a material first compiles.
+  const debugGLSL = (label: string, mat: THREE.ShaderMaterial) => {
+    mat.onBeforeCompile = () => {
+      // Marker so the global debug.onShaderError (if installed) can attribute it.
+      (mat as unknown as { __label?: string }).__label = label;
+    };
+  };
+  debugGLSL(`${opts.kind} surface`, surfaceMat);
+
   let atmosphere: THREE.Mesh | null = null;
   if (opts.kind === 'planet') {
     const atmoGeom = new THREE.SphereGeometry(opts.radius * 1.05, 64, 48);
     const atmoMat = buildAtmosphereMaterial(opts, 0x66aaff);
+    debugGLSL(`${opts.kind} atmosphere`, atmoMat);
     atmosphere = new THREE.Mesh(atmoGeom, atmoMat);
     atmosphere.renderOrder = 1;
   }
