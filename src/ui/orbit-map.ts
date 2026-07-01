@@ -162,7 +162,7 @@ export class OrbitMap {
       const rz = pz - bz;
       const r2 = rx * rx + ry * ry + rz * rz;
       const r = Math.sqrt(r2);
-      if (r < flight.planet.data.radius) break;
+      if (r < dom.data.radius) break;
       pts.push(new THREE.Vector3(px, py, pz));
       const a = -mu / (r2 * r);
       vx += a * rx * TRAJECTORY_DT;
@@ -192,14 +192,14 @@ export class OrbitMap {
 
   private updateOverlay(flight: FlightController): void {
     const root = flight.ship.rootBody;
-    const planet = flight.planet;
-    const dx = root.position.x - planet.position.x;
-    const dy = root.position.y - planet.position.y;
-    const dz = root.position.z - planet.position.z;
+    // Use the dominant body so Ap/Pe is correct when in Luna's SOI.
+    const dom = flight.dominantBodyFor(root.position);
+    const dx = root.position.x - dom.position.x;
+    const dy = root.position.y - dom.position.y;
+    const dz = root.position.z - dom.position.z;
     const r = Math.hypot(dx, dy, dz);
     const v = Math.hypot(root.velocity.x, root.velocity.y, root.velocity.z);
-    // Quick energy-based Ap/Pe (2-body approximation around the planet).
-    const mu = planet.mu;
+    const mu = dom.mu;
     const energy = (v * v) / 2 - mu / r;
     let apPe = 'escape';
     if (energy < 0) {
@@ -211,8 +211,8 @@ export class OrbitMap {
       const kz = (v2 - mu / r) * dz - rvDot * root.velocity.z;
       const ecc = Math.hypot(kx, ky, kz) / mu;
       const a = -mu / (2 * energy);
-      const ap = a * (1 + ecc) - planet.data.radius;
-      const pe = a * (1 - ecc) - planet.data.radius;
+      const ap = a * (1 + ecc) - dom.data.radius;
+      const pe = a * (1 - ecc) - dom.data.radius;
       apPe = `Ap ${ap.toFixed(0)} m / Pe ${pe.toFixed(0)} m`;
     }
     this.apPeText.textContent = apPe;

@@ -1,6 +1,7 @@
 // src/flight/hud.ts
 import type { FlightController } from './flight-controller';
 import { orbitalEnergy, apoapsisPeriapsis } from '../physics/orbit-math';
+import { MOON_SOI } from '../physics/constants';
 
 export class Hud {
   private root: HTMLElement;
@@ -38,22 +39,25 @@ export class Hud {
 
   update(flight: FlightController): void {
     const root = flight.ship.rootBody;
-    const planetPos = flight.planet.position;
-    const dx = root.position.x - planetPos.x;
-    const dy = root.position.y - planetPos.y;
-    const dz = root.position.z - planetPos.z;
-    const alt = Math.hypot(dx, dy, dz) - flight.planet.data.radius;
+    // Use the dominant celestial body (planet or moon) so Ap/Pe and altitude
+    // are correct when inside Luna's sphere of influence.
+    const dom = flight.dominantBodyFor(root.position);
+    const domPos = dom.position;
+    const dx = root.position.x - domPos.x;
+    const dy = root.position.y - domPos.y;
+    const dz = root.position.z - domPos.z;
+    const alt = Math.hypot(dx, dy, dz) - dom.data.radius;
     const vel = Math.hypot(root.velocity.x, root.velocity.y, root.velocity.z);
 
     const r: [number, number, number] = [dx, dy, dz];
     const v: [number, number, number] = [root.velocity.x, root.velocity.y, root.velocity.z];
-    const mu = flight.planet.mu;
+    const mu = dom.mu;
     const energy = orbitalEnergy(r, v, mu);
     let apPeText = 'escape';
     if (energy < 0) {
       const { apoapsis, periapsis } = apoapsisPeriapsis(r, v, mu);
-      apPeText = `Ap ${(apoapsis - flight.planet.data.radius).toFixed(0)} / Pe ${(
-        periapsis - flight.planet.data.radius
+      apPeText = `Ap ${(apoapsis - dom.data.radius).toFixed(0)} / Pe ${(
+        periapsis - dom.data.radius
       ).toFixed(0)}`;
     }
     this.altitude.textContent = alt.toFixed(0);
@@ -68,7 +72,7 @@ export class Hud {
       root.position.y - moonPos.y,
       root.position.z - moonPos.z,
     );
-    this.soi.textContent = md < 700 ? 'Luna' : 'Terra';
+    this.soi.textContent = md < MOON_SOI ? 'Luna' : 'Terra';
 
     // SAS indicator: green when engaged, dim when off.
     if (flight.sasEnabled) {

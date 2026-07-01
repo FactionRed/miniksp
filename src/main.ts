@@ -149,9 +149,9 @@ input.onPressed('F1', () => {
   if (fsm.current !== 'BUILD') revertToVab();
 });
 
-input.onPressed('Delete', () => vab.deleteSelected());
-input.onPressed('KeyQ', () => vab.rotateSelected(-90));
-input.onPressed('KeyE', () => vab.rotateSelected(90));
+input.onPressed('Delete', () => { if (fsm.current === 'BUILD') vab.deleteSelected(); });
+input.onPressed('KeyQ', () => { if (fsm.current === 'BUILD') vab.rotateSelected(-90); });
+input.onPressed('KeyE', () => { if (fsm.current === 'BUILD') vab.rotateSelected(90); });
 
 const ndc = new THREE.Vector2();
 renderer.domElement.addEventListener('pointermove', (e) => {
@@ -196,12 +196,20 @@ input.onPressed('KeyH', () => {
   hints.style.display = hints.style.display === 'none' ? 'block' : 'none';
 });
 
+let lastFrameTime = performance.now();
 function animate() {
   requestAnimationFrame(animate);
+  // Use the real delta time so physics runs at the correct rate on any
+  // monitor refresh rate (60Hz, 144Hz, etc.). Cap at 100ms to avoid
+  // huge jumps if the tab was backgrounded.
+  const now = performance.now();
+  const dt = Math.min((now - lastFrameTime) / 1000, 0.1);
+  lastFrameTime = now;
+
   if (fsm.current === 'BUILD') ui.onReadyChange(vab.isReady());
   if (fsm.current === 'FLIGHT' && flight && controls && flightCam) {
-    controls.update(1 / 60);
-    flight.step(1 / 60);
+    controls.update(dt);
+    flight.step(dt);
     // Flight camera and map camera share one camera object — only one may drive it.
     if (orbitMap.visible) {
       orbitMap.draw(flight);

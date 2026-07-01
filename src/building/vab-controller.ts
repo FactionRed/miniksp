@@ -119,6 +119,14 @@ export class VabController {
   deleteSelected(): void {
     if (!this.selectedUid) return;
     const uid = this.selectedUid;
+    // Re-parent orphaned children before removing the part, so the staging
+    // tree walk in stage-manager.ts doesn't break on a dangling attachParentUid.
+    const parentOfDeleted = this.design.parts.find((p) => p.uid === uid)?.attachParentUid;
+    for (const p of this.design.parts) {
+      if (p.attachParentUid === uid) {
+        p.attachParentUid = parentOfDeleted;
+      }
+    }
     const mesh = this.meshes.get(uid);
     if (mesh) {
       this.group.remove(mesh);

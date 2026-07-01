@@ -33,3 +33,9 @@ export const MOON = {
 // this for the day/night terminator + atmosphere sunlit limb. Kept here as a
 // single source of truth; flight-controller updates each body with it per frame.
 export const SUN_DIRECTION = new Float64Array([1, 0.35, 0.6]);
+
+// Moon's sphere of influence: a * (m_body / m_parent)^(2/5).
+// Precomputed so all consumers (HUD, win-states, gravity) use the exact same
+// boundary instead of hardcoding an approximation that drifts.
+import { sphereOfInfluence } from './orbit-math';
+export const MOON_SOI = sphereOfInfluence(MOON.orbitRadius, MOON.mass, PLANET.mass);

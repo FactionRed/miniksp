@@ -76,11 +76,13 @@ function buildTerrainGeometry(radius: number, seed: number, kind: BodyKind): {
   const geom = new THREE.IcosahedronGeometry(radius, detail);
   const noise3D = createNoise3D(mulberry32(seed));
 
-  // Terrain amplitude as a fraction of radius. Big enough that mountains visibly
-  // protrude past the smooth outline from orbit/chase distance. (Earlier 0.04
-  // was invisible at viewing scale — 0.18 gives ±54m peaks on a 300m planet.)
-  // Moon: smaller, cratered-looking lumps.
-  const amplitudeFrac = kind === 'planet' ? 0.18 : 0.12;
+  // Terrain amplitude as a fraction of radius. Kept small (4%) so the
+  // collision sphere (at the base radius) stays a close match to the visual
+  // surface — displaced peaks are only ±12m on a 300m planet, so ships resting
+  // on the collision sphere don't visibly clip into mountains.
+  // (Earlier 0.18 was visually dramatic but caused 54m clipping; the comment
+  // in celestial-body.ts already documented "≤4%, so the offset is minor".)
+  const amplitudeFrac = 0.04;
   const amplitude = radius * amplitudeFrac;
   // Higher-frequency base so peaks look jagged rather than bulbous.
   const baseFreq = kind === 'planet' ? 2.5 : 3.5;

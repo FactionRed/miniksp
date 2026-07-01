@@ -1,6 +1,7 @@
 // src/ui/win-states.ts
 import type { FlightController } from '../flight/flight-controller';
 import { isClosedOrbit } from '../physics/orbit-math';
+import { MOON_SOI } from '../physics/constants';
 
 export type WinEvent = 'orbit' | 'moon-landed' | 'safe-return' | 'crash';
 
@@ -71,7 +72,7 @@ export class WinStates {
       root.position.y - moonPos.y,
       root.position.z - moonPos.z,
     );
-    const inMoonSoi = moonDist < 700; // matches HUD heuristic
+    const inMoonSoi = moonDist < MOON_SOI;
 
     // Orbit achieved (around planet, not yet entered moon SOI).
     if (
@@ -84,11 +85,20 @@ export class WinStates {
       this.onEvent('orbit');
     }
 
-    // Moon landed: in moon SOI, very low vertical speed, close to surface.
+    // Moon landed: in moon SOI, very low radial speed, close to surface.
+    // "Vertical speed" is the component of velocity along the radial direction
+    // from moon center to ship — NOT world-Y, because the moon orbits in the
+    // XZ plane and its surface normal can point in any direction.
     if (inMoonSoi && !this.achieved.has('moon-landed')) {
       this.wasInMoonSoi = true;
       const moonAlt = moonDist - flight.moon.data.radius;
-      const vertSpeed = Math.abs(root.velocity.y);
+      const moonDx = root.position.x - moonPos.x;
+      const moonDy = root.position.y - moonPos.y;
+      const moonDz = root.position.z - moonPos.z;
+      const radialVel = moonDist > 1e-3
+        ? (root.velocity.x * moonDx + root.velocity.y * moonDy + root.velocity.z * moonDz) / moonDist
+        : 0;
+      const vertSpeed = Math.abs(radialVel);
       if (moonAlt < 5 && vertSpeed < 3) {
         this.achieved.add('moon-landed');
         this.show('🌕 Lunar Landing!');
@@ -98,7 +108,19 @@ export class WinStates {
 
     // Crashed into either body.
     const planetAlt = Math.hypot(r[0], r[1], r[2]) - planet.data.radius;
-    if (planetAlt < -1 || (inMoonSoi && moonDist < flight.moon.data.radius - 1)) {
+    // Moon crash: inside the moon OR at the surface with high radial speed.
+    const moonAltitude = moonDist - flight.moon.data.radius;
+    const moonDx2 = root.position.x - moonPos.x;
+    const moonDy2 = root.position.y - moonPos.y;
+    const moonDz2 = root.position.z - moonPos.z;
+    const moonRadialVel = moonDist > 1e-3
+      ? (root.velocity.x * moonDx2 + root.velocity.y * moonDy2 + root.velocity.z * moonDz2) / moonDist
+      : 0;
+    const moonCrashed = inMoonSoi && (
+      moonDist < flight.moon.data.radius - 1 ||
+      (moonAltitude < 5 && Math.abs(moonRadialVel) >= 3)
+    );
+    if (planetAlt < -1 || moonCrashed) {
       if (!this.achieved.has('crash')) {
         this.achieved.add('crash');
         this.show('💥 Crashed — Revert with F1');

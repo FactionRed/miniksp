@@ -34,7 +34,10 @@ export default defineConfig({
             },
           },
           // Don't spawn Electron when building the renderer alone.
-          renderer: {},
+          // renderer: undefined — the game uses zero renderer-side Electron
+          // APIs, so we omit the key entirely. Passing `renderer: {}` is
+          // truthy and triggers vite-plugin-electron-renderer, which crashes
+          // the dev server on Windows (illegal '?' in cache filenames).
         }),
       ],
   server: { open: false }, // Electron opens its own window; avoid the browser tab too
