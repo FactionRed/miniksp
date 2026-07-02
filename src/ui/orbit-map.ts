@@ -79,8 +79,8 @@ export class OrbitMap {
       const dy = e.clientY - this.lastY;
       this.lastX = e.clientX;
       this.lastY = e.clientY;
-      this.mapAzimuth -= dx * 0.005;
-      this.mapPitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, this.mapPitch + dy * 0.005));
+      this.mapAzimuth += dx * 0.005;
+      this.mapPitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, this.mapPitch - dy * 0.005));
     };
     this.onUp = () => {
       this.dragging = false;
