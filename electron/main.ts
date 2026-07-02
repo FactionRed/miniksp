@@ -19,7 +19,7 @@ function createWindow(): void {
     height: 800,
     minWidth: 960,
     minHeight: 600,
-    title: 'miniKSP',
+    title: 'Project Orbital Frogs',
     backgroundColor: '#05060a',
     webPreferences: {
       // Secure defaults: no Node in renderer, isolated context, minimal preload.

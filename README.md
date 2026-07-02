@@ -1,4 +1,4 @@
-# miniKSP
+# Project Orbital Frogs
 
 A super-basic 3D Kerbal Space Program prototype. Build a rocket in the VAB,
 launch it, reach orbit, transfer to the moon, land, and return safely.
@@ -9,12 +9,12 @@ Runs in the browser or as a standalone Windows desktop app (Electron).
 
 ## Install
 
-There are three ways to get miniKSP running. Pick whichever fits.
+There are three ways to get Project Orbital Frogs running. Pick whichever fits.
 
 ### Option A — Download the standalone .exe (easiest, no install)
 
 1. Go to the [Releases page](../../releases/latest).
-2. Download **`miniKSP-0.1.5-portable.exe`** (~71 MB).
+2. Download **`ProjectOrbitalFrogs-0.1.6-portable.exe`** (~71 MB).
 3. Double-click it. That's it — no Node, no browser, no install step.
 
 > The portable exe extracts to a temp folder on first run, so the first launch
@@ -36,7 +36,7 @@ Open http://localhost:5173
 ### Option C — Download the source zip + run locally
 
 1. Go to the [Releases page](../../releases/latest).
-2. Download **`miniksp-0.1.5-source.zip`** and unzip it.
+2. Download **`orbitalfrogs-0.1.6-source.zip`** and unzip it.
 3. In the unzipped folder:
 
 ```bash
@@ -53,7 +53,7 @@ If you want to package the app into a standalone Windows executable yourself
 
 ```bash
 npm install
-npm run build:exe    # → release/miniKSP-<version>-portable.exe
+npm run build:exe    # → release/ProjectOrbitalFrogs-<version>-portable.exe
 ```
 
 ### ⚠️ One-time setup: enable Developer Mode (Windows)

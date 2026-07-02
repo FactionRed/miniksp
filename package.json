@@ -4,7 +4,7 @@
   "version": "0.1.6",
   "type": "module",
   "main": "dist-electron/main.js",
-  "author": "miniKSP",
+  "author": "Project Orbital Frogs",
   "description": "A super-basic 3D KSP prototype. Build a rocket, reach orbit, transfer to the moon, land, and return.",
   "build": {
     "extends": "./electron-builder.yml"
