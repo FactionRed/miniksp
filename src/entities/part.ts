@@ -23,7 +23,3 @@ export interface PlacedPart {
   rotation: THREE.Euler; // local rotation
   attachParentUid?: string; // uid of the part this is welded to
 }
-
-export function partVolume(p: PartDef): number {
-  return p.size[0] * p.size[1] * p.size[2] * 8; // half-extents → full
-}

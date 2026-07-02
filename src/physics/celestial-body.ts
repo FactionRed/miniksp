@@ -83,11 +83,6 @@ export class CelestialBody {
     return G * this.data.mass;
   }
 
-  /** Orbit semi-major axis, exposed for map drawing (0 for a non-orbiting body). */
-  get orbitRadiusApproxForMap(): number {
-    return this.orbitRadius;
-  }
-
   /** Update position if this body orbits the world origin (planet center). */
   update(timeSeconds: number): void {
     if (this.orbitPeriod > 0) {

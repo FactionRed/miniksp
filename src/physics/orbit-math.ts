@@ -6,13 +6,7 @@ export type Vec3 = [number, number, number];
 function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
-function cross(a: Vec3, b: Vec3): Vec3 {
-  return [
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-  ];
-}
+
 function mag(a: Vec3): number {
   return Math.hypot(a[0], a[1], a[2]);
 }
@@ -48,16 +42,6 @@ export function sphereOfInfluence(orbitRadius: number, bodyMass: number, parentM
   return orbitRadius * Math.pow(bodyMass / parentMass, 0.4);
 }
 
-/** Circular orbit speed at distance r around body with gravitational parameter mu. */
-export function circularSpeed(mu: number, r: number): number {
-  return Math.sqrt(mu / r);
-}
-
-/** Escape speed at distance r. */
-export function escapeSpeed(mu: number, r: number): number {
-  return Math.sqrt((2 * mu) / r);
-}
-
 /** Whether current r,v yields a closed orbit (energy < 0 and periapsis > body radius). */
 export function isClosedOrbit(r: Vec3, v: Vec3, mu: number, bodyRadius: number): boolean {
   const energy = orbitalEnergy(r, v, mu);
@@ -65,6 +49,3 @@ export function isClosedOrbit(r: Vec3, v: Vec3, mu: number, bodyRadius: number):
   const { periapsis } = apoapsisPeriapsis(r, v, mu);
   return periapsis > bodyRadius;
 }
-
-// cross() currently unused by exports but retained for orbit-map trajectory code in M7.
-export { cross };

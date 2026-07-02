@@ -128,7 +128,6 @@ const ui = new VabUi({
   onLaunch: () => {
     if (vab.isReady()) launchFlight(vab.design);
   },
-  onRevert: () => {},
 });
 
 const hud = new Hud();

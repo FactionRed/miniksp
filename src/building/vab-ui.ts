@@ -6,7 +6,6 @@ export interface VabUiCallbacks {
   onDeleteSelected: () => void;
   onRotateSelected: (degrees: number) => void;
   onLaunch: () => void;
-  onRevert: () => void;
 }
 
 export class VabUi {

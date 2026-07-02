@@ -67,10 +67,6 @@ Three.js · cannon-es · simplex-noise · Vite + TypeScript · Electron · Vites
 
 ## For Developers
 
-- [Design spec](docs/superpowers/specs/2026-06-21-miniksp-design.md)
-- [Implementation plan](docs/superpowers/plans/2026-06-21-miniksp.md)
-- [Electron port plan](docs/superpowers/plans/2026-06-26-electron-port.md)
-
 Physics constants live in `src/physics/constants.ts` and part stats in
 `src/entities/parts-catalog.ts` — tuned for a two-stage rocket to reach orbit
 and the moon. Adjust to taste.

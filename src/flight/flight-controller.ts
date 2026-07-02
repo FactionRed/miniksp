@@ -126,14 +126,6 @@ export class FlightController {
     return dominantBody(shipPos, this.candidates());
   }
 
-  ignite(): void {
-    this.stageActive = true;
-  }
-
-  cutStage(): void {
-    this.stageActive = false;
-  }
-
   /**
    * Compute the target direction for the active hold mode and apply PD torque to
    * rotate the nose toward it. Directions are derived from the ship's position r
